@@ -162,10 +162,10 @@ function setPrincipal(ctx: Context, principal: Record<string, unknown>): void {
 }
 
 function authValue(evidence: readonly AuthEvidence[]): ChargeValueName {
-  const admitted = evidence.some((item) => item.admitted);
+  const validated = evidence.some((item) => item.admitted);
   const denied = evidence.some((item) => !item.admitted);
-  if (admitted && denied) return "stable";
-  if (admitted) return "potential";
+  if (validated && denied) return "stable";
+  if (validated) return "potential";
   return "active";
 }
 
@@ -197,7 +197,7 @@ function chargeBits(value: ChargeValueName): [boolean, boolean] {
   return [false, false];
 }
 
-export function authAdmissionJudgments(input: AuthAdmissionInput): readonly RequestAdmissionJudgment[] {
+export function authValidationJudgments(input: AuthAdmissionInput): readonly RequestAdmissionJudgment[] {
   const value = authValue(input.evidence);
   const reason = authReason(input.evidence, value);
   return Object.freeze([{
@@ -208,8 +208,8 @@ export function authAdmissionJudgments(input: AuthAdmissionInput): readonly Requ
   }]);
 }
 
-export function authAdmissionReport(input: AuthAdmissionInput): AuthAdmissionReport {
-  const judgments = authAdmissionJudgments(input);
+export function authValidationReport(input: AuthAdmissionInput): AuthAdmissionReport {
+  const judgments = authValidationJudgments(input);
   const settled = settleRequestTrace(input.trace, judgments);
   const value = settled.value;
   const claims = value === "potential" ? authClaims(input.evidence) : null;
@@ -286,7 +286,7 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
   return async (ctx) => {
     const t = String(Date.now()); // law-allow: wall-clock-as-data — witness timestamp testimony on ledger evidence, not ordering; store append order is the trace
     const evidence: AuthEvidence[] = [];
-    let admittedClaims: JwtPayload | null = null;
+    let validatedClaims: JwtPayload | null = null;
 
     // ── JWT ───────────────────────────────────────────────────────────────────
     if (opts.jwt) {
@@ -309,7 +309,7 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
 
           if (expOk && nbfOk && issOk && audOk) {
             evidence.push({ source: "jwt", admitted: true, claims: payload });
-            admittedClaims = payload;
+            validatedClaims = payload;
           } else {
             evidence.push({
               source: "jwt",
@@ -323,7 +323,7 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
     }
 
     // ── Basic ─────────────────────────────────────────────────────────────────
-    if (opts.basic && !admittedClaims) {
+    if (opts.basic && !validatedClaims) {
       const auth = ctx.req.headers["authorization"];
       if (auth?.startsWith("Basic ")) {
         const creds = Buffer.from(auth.slice(6), "base64").toString("utf8");
@@ -332,8 +332,8 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
         const pass = creds.slice(sep + 1);
         const ok = await opts.basic.verify(user, pass, ctx);
         if (ok) {
-          admittedClaims = { sub: user };
-          evidence.push({ source: "basic", admitted: true, claims: admittedClaims });
+          validatedClaims = { sub: user };
+          evidence.push({ source: "basic", admitted: true, claims: validatedClaims });
         } else {
           evidence.push({ source: "basic", admitted: false, reason: "invalid credentials" });
         }
@@ -341,7 +341,7 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
     }
 
     // ── API Key ───────────────────────────────────────────────────────────────
-    if (opts.apiKey && !admittedClaims) {
+    if (opts.apiKey && !validatedClaims) {
       const keyOpts = opts.apiKey;
       const header = keyOpts.header ?? "X-Api-Key";
       let key = ctx.req.headers[header.toLowerCase()] as string | undefined;
@@ -353,8 +353,8 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
           ? keyOpts.keys.has(key)
           : (keyOpts.keys as string[]).includes(key);
         if (ok) {
-          admittedClaims = { key };
-          evidence.push({ source: "api-key", admitted: true, claims: admittedClaims });
+          validatedClaims = { key };
+          evidence.push({ source: "api-key", admitted: true, claims: validatedClaims });
         } else {
           evidence.push({ source: "api-key", admitted: false, reason: "invalid API key" });
         }
@@ -369,7 +369,7 @@ export function authenticate(opts: AuthOptions = {}): Middleware {
         : { source: "verify", admitted: false, reason: "unauthorized" });
     }
 
-    const report = authAdmissionReport({
+    const report = authValidationReport({
       trace: ctx.trace,
       evidence,
       claimsAttribute: claimsAttr,
