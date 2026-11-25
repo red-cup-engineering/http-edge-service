@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@red-cup-engineering/computing-with-http": "^0.1.0",
+    "@red-cup-engineering/cryptographic-computer-data-engineering-services-section": "0.3.8-dev.0",
     "@red-cup-engineering/http-server-core-service": "workspace:*",
     "@red-cup-engineering/metrologic": "^0.22.11"
   },

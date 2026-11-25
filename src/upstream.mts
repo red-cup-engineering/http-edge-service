@@ -1,6 +1,6 @@
 // edge/upstream.ts — load-balanced reverse-proxy upstream pools.
 
-import { createHash } from "node:crypto";
+import { protocolDigestBytes } from "@red-cup-engineering/cryptographic-computer-data-engineering-services-section/hash";
 import * as http from "node:http";
 import * as https from "node:https";
 import type { IncomingMessage } from "node:http";
@@ -68,7 +68,7 @@ function stripHopByHop(headers: IncomingMessage["headers"] | OutgoingHttpHeaders
 }
 
 function hashToIndex(key: unknown, n: number): number {
-  const digest = createHash("sha1").update(String(key ?? "")).digest();
+  const digest = protocolDigestBytes("sha1", String(key ?? ""));
   const u32 = ((digest[0]! << 24) | (digest[1]! << 16) | (digest[2]! << 8) | digest[3]!) >>> 0;
   return u32 % n;
 }
